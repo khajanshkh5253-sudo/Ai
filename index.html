@@ -12,7 +12,7 @@
   }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,Segoe UI,Roboto,Helvetica,Arial}
-  .app{display:grid;grid-template-columns:260px 1fr;min-height:100svh}
+  .app{display:grid;grid-template-columns:260px 1fr;min-height:100vh}
   aside{background:var(--panel);border-right:1px solid #1f1f2b;padding:16px;display:flex;flex-direction:column;gap:14px}
   .brand{display:flex;align-items:center;gap:10px;font-weight:700}
   .dot{width:10px;height:10px;border-radius:50%;background:var(--accent)}
@@ -40,6 +40,7 @@
   .welcome h1{margin:0 0 6px;font-size:28px;color:#bda5ff}
   .welcome p{margin:0;color:var(--muted)}
   @media (max-width:900px){ .app{grid-template-columns:1fr} aside{display:none} }
+  .light{--bg:white;--panel:#f2f2f2;--text:black;--bubble:#e2e2e2;--user:#d6d6ff;--muted:#555}
 </style>
 </head>
 <body>
@@ -84,10 +85,8 @@
 </div>
 
 <script>
-// ==== CONFIG ====
-const OPENAI_API_KEY = "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"; // <-- apna token yaha daal
-const MODEL = "gpt-4o-mini"; // fast + sasta
-// =================
+const OPENAI_API_KEY = "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"; // yaha apna key daal
+const MODEL = "gpt-4o-mini";
 
 const chatEl = document.getElementById("chat");
 const inputEl = document.getElementById("input");
@@ -174,36 +173,27 @@ async function askGPT(prompt){
   }
 }
 
-sendBtn.onclick = async () => {
+function sendMessage(){
   const text = inputEl.value.trim();
   if(!text) return;
   push("user", text);
   inputEl.value = "";
-  const thinkingId = Date.now();
   push("assistant", "...");
   render();
-  const reply = await askGPT(text);
-  const chat = activeChat();
-  chat.messages[chat.messages.length-1] = { role: "assistant", content: reply };
-  persist();
-  render();
-};
+  askGPT(text).then(reply=>{
+    const chat = activeChat();
+    chat.messages[chat.messages.length-1] = { role: "assistant", content: reply };
+    persist();
+    render();
+  });
+}
 
-tipsEl.onclick = e => {
-  if(e.target.classList.contains("chip")){
-    inputEl.value = e.target.textContent;
-    sendBtn.click();
-  }
-};
+sendBtn.onclick = sendMessage;
+inputEl.addEventListener("keypress", e => { if(e.key === "Enter") sendMessage(); });
+tipsEl.onclick = e => { if(e.target.classList.contains("chip")){ inputEl.value = e.target.textContent; sendMessage(); } };
 newChatBtn.onclick = ()=>createChat("New Chat");
-clearAllBtn.onclick = ()=>{
-  chats = [];
-  persist();
-  createChat("Hi");
-};
-themeBtn.onclick = ()=>{
-  document.body.classList.toggle("light");
-};
+clearAllBtn.onclick = ()=>{ chats = []; persist(); createChat("Hi"); };
+themeBtn.onclick = ()=>{ document.body.classList.toggle("light"); };
 render();
 </script>
 </body>
