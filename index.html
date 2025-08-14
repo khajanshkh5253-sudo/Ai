@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>NeoChat AI (Local Demo)</title>
+<title>NeoChat AI (GPT-4o)</title>
 <style>
   :root{
     --bg:#0b0b10; --panel:#12121a; --accent:#8a5cf6; --accent-2:#b598ff;
@@ -36,8 +36,6 @@
   .send{background:var(--accent);border:0;color:white;padding:0 18px;border-radius:12px;font-weight:700;cursor:pointer}
   .small{font-size:12px;color:var(--muted)}
   a{color:var(--accent-2);text-decoration:none}
-
-  /* Welcome card */
   .welcome{margin:28px 22px;padding:28px;border:1px solid #1f1f2b;background:#12121a;border-radius:18px;text-align:center}
   .welcome h1{margin:0 0 6px;font-size:28px;color:#bda5ff}
   .welcome p{margin:0;color:var(--muted)}
@@ -67,7 +65,7 @@
 
     <div id="welcome" class="welcome">
       <h1>Welcome to NeoChat AI</h1>
-      <p>Ask me anything. (Local demo — no internet or token)</p>
+      <p>Ask me anything. (Powered by GPT-4o)</p>
       <div class="tips" id="tips">
         <button class="chip">Tell me a story</button>
         <button class="chip">Explain quantum computing</button>
@@ -86,23 +84,10 @@
 </div>
 
 <script>
-/* ========= Local “AI” (no token, no API) ========= */
-const demoBrain = (q) => {
-  const s = q.toLowerCase().trim();
-  const now = new Date();
-  if(!s) return "Kuch likho bhai 🙂";
-  if (/hello|hi|namaste|salam|salaam/.test(s)) return "Hi! Kaise ho? Main local demo bot hoon (internet nahi lagta).";
-  if (s.includes("time")) return "Abhi time hai: " + now.toLocaleTimeString();
-  if (s.includes("date")) return "Aaj ki tareekh: " + now.toLocaleDateString();
-  if (s.includes("joke")) return "Programmers ki shaadi late kyun hoti? Kyunki wo commit se darte hain! 😄";
-  if (s.includes("poem")) return "Raat ke canvas par likhi, kuch sochon ki roshni;\nCode ki dhun me dhadke, dil ki chhoti si kahani.";
-  if (s.includes("javascript")) return "JS tip: `map`, `filter`, `reduce` se arrays ke saath kamaal kar sakte ho. Example: `[1,2,3].map(x=>x*2)`.";
-  if (s.includes("quantum")) return "Quantum computing qubits use karta hai jo 0 aur 1 dono states ka superposition rakh sakte hain—isi se parallelism milta hai.";
-  if (s.includes("story")) return "Ek chhota dev ne chat app banaya. Log aaye, sawal laaye. App ne pyaar se kaha: 'main hoon na'—aur sab muskuraye.";
-  // fallback: small helpful template answer
-  return "Sun liya: “" + q + "”.\nIs demo me internet nahi hai, par main general tips, poems, jokes, time/date, JS, quantum jaise topics par batata hoon. 😊";
-};
-/* ================================================ */
+// ==== CONFIG ====
+const OPENAI_API_KEY = "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"; // <-- apna token yaha daal
+const MODEL = "gpt-4o-mini"; // fast + sasta
+// =================
 
 const chatEl = document.getElementById("chat");
 const inputEl = document.getElementById("input");
@@ -148,3 +133,78 @@ function push(role, content){
 }
 function render(){
   const chat = activeChat();
+  chatEl.innerHTML = "";
+  chat.messages.forEach(m=>{
+    const el = document.createElement("div");
+    el.className = "msg " + (m.role==="user"?"me":"");
+    el.innerHTML = `<div class="avatar">${m.role==="user"?"Me":"AI"}</div><div class="bubble">${m.content}</div>`;
+    chatEl.appendChild(el);
+  });
+  chatEl.scrollTop = chatEl.scrollHeight;
+  welcome.style.display = chat.messages.length ? "none" : "";
+  drawHistory();
+}
+function drawHistory(){
+  historyEl.innerHTML = "";
+  chats.forEach(c=>{
+    const div = document.createElement("div");
+    div.className = "hitem";
+    div.innerHTML = `<span>${c.title}</span>`;
+    div.onclick = ()=>switchChat(c.id);
+    historyEl.appendChild(div);
+  });
+}
+async function askGPT(prompt){
+  try {
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${OPENAI_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        messages: [{ role: "user", content: prompt }]
+      })
+    });
+    const data = await res.json();
+    return data.choices[0].message.content.trim();
+  } catch (e) {
+    return "Error: " + e.message;
+  }
+}
+
+sendBtn.onclick = async () => {
+  const text = inputEl.value.trim();
+  if(!text) return;
+  push("user", text);
+  inputEl.value = "";
+  const thinkingId = Date.now();
+  push("assistant", "...");
+  render();
+  const reply = await askGPT(text);
+  const chat = activeChat();
+  chat.messages[chat.messages.length-1] = { role: "assistant", content: reply };
+  persist();
+  render();
+};
+
+tipsEl.onclick = e => {
+  if(e.target.classList.contains("chip")){
+    inputEl.value = e.target.textContent;
+    sendBtn.click();
+  }
+};
+newChatBtn.onclick = ()=>createChat("New Chat");
+clearAllBtn.onclick = ()=>{
+  chats = [];
+  persist();
+  createChat("Hi");
+};
+themeBtn.onclick = ()=>{
+  document.body.classList.toggle("light");
+};
+render();
+</script>
+</body>
+</html>
