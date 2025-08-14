@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>NeoChat AI</title>
+<style>
+  :root{
+    --bg:#0b0b10; --panel:#12121a; --accent:#8a5cf6; --accent-2:#b598ff;
+    --text:#e8e8f5; --muted:#a8a8c0; --bubble:#191925; --user:#27273a;
+    --radius:16px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,Segoe UI,Roboto,Helvetica,Arial}
+  .app{display:grid;grid-template-columns:260px 1fr;min-height:100svh}
+  aside{background:var(--panel);border-right:1px solid #1f1f2b;padding:16px;display:flex;flex-direction:column;gap:14px}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:700}
+  .dot{width:10px;height:10px;border-radius:50%;background:var(--accent)}
+  .newchat{background:var(--accent);border:0;color:white;padding:10px 12px;border-radius:12px;cursor:pointer;font-weight:600}
+  .ghost{background:transparent;border:1px solid #2d2d44;color:var(--text);padding:8px 10px;border-radius:12px;cursor:pointer}
+  main{display:grid;grid-template-rows:auto 1fr auto;min-width:0}
+  header{padding:22px;border-bottom:1px solid #1f1f2b;display:flex;justify-content:space-between;align-items:center}
+  .title{font-size:22px;font-weight:800}
+  .tips{display:flex;flex-wrap:wrap;gap:8px;padding:18px 22px}
+  .chip{background:#1b1b28;border:1px solid #26263a;color:var(--muted);padding:8px 10px;border-radius:999px;cursor:pointer}
+  .chat{padding:18px 22px;overflow-y:auto;display:flex;flex-direction:column;gap:12px}
+  .msg{display:flex;gap:12px;align-items:flex-start}
+  .bubble{background:var(--bubble);padding:12px 14px;border-radius:var(--radius);max-width:820px;white-space:pre-wrap;word-wrap:break-word}
+  .me .bubble{background:var(--user)}
+  .avatar{min-width:36px;height:36px;border-radius:12px;background:#22223a;display:grid;place-items:center;color:var(--accent-2);font-weight:800}
+  .composer{padding:16px 22px;border-top:1px solid #1f1f2b;display:flex;gap:10px}
+  .composer input{flex:1;background:#141422;border:1px solid #24243a;border-radius:12px;padding:14px;color:var(--text);outline:none}
+  .send{background:var(--accent);border:0;color:white;padding:0 18px;border-radius:12px;font-weight:700;cursor:pointer}
+  .small{font-size:12px;color:var(--muted)}
+  a{color:var(--accent-2);text-decoration:none}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside>
+    <div class="brand"><div class="dot"></div><div>NeoChat</div></div>
+    <button class="newchat" id="newChat">+ New Chat</button>
+    <div class="small">Messages are stored locally.</div>
+    <button class="ghost" id="toggleTheme">Light Mode</button>
+  </aside>
+
+  <main>
+    <header>
+      <div class="title">Welcome to NeoChat AI</div>
+      <div class="small">“Ask me anything.”</div>
+    </header>
+
+    <div class="tips" id="tips">
+      <button class="chip">Tell me a story</button>
+      <button class="chip">Explain quantum computing</button>
+      <button class="chip">Write a poem</button>
+      <button class="chip">Help me learn JavaScript</button>
+    </div>
+
+    <div class="chat" id="chat"></div>
+
+    <div class="composer">
+      <input id="input" placeholder="Type your message here..." autocomplete="off" />
+      <button class="send" id="send">↗</button>
+    </div>
+  </main>
+</div>
+
+<script>
+/* =================== CONFIG =================== */
+/* SAFE mode (proxy): host a tiny Worker/Function and put its URL here */
+const PROXY_URL = ""; // e.g. "https://your-worker-xyz.workers.dev/chat"
+
+/* EASY (UNSAFE) mode: paste your API key here for quick testing only */
+const DIRECT_KEY = ""; // e.g. "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"  (PUBLIC HO JAYEGA!)
+
+/* Choose which provider to call in DIRECT mode (if you insist). */
+const DIRECT_PROVIDER = "openai"; // "openai" or "deepseek"
+
+/* Model names you want */
+const MODELS = {
+  openai: "gpt-4o-mini",
+  deepseek: "deepseek-chat"
+};
+/* ============================================== */
+
+const chatEl = document.getElementById("chat");
+const inputEl = document.getElementById("input");
+const sendBtn = document.getElementById("send");
+const tipsEl = document.getElementById("tips");
+const newChatBtn = document.getElementById("newChat");
+const themeBtn = document.getElementById("toggleTheme");
+
+let history = JSON.parse(localStorage.getItem("neochat_history") || "[]");
+
+function save() { localStorage.setItem("neochat_history", JSON.stringify(history)); }
+function render() {
+  chatEl.innerHTML = "";
+  for (const m of history) {
+    const row = document.createElement("div"); row.className = "msg " + (m.role==="user"?"me":"bot");
+    row.innerHTML = `
+      <div class="avatar">${m.role==="user"?"U":"AI"}</div>
+      <div class="bubble">${escapeHTML(m.content)}</div>`;
+    chatEl.appendChild(row);
+  }
+  chatEl.scrollTop = chatEl.scrollHeight;
+}
+function escapeHTML(s){return s.replace(/[&<>]/g,c=>({ "&":"&amp;","<":"&lt;",">":"&gt;" }[c]))}
+
+function push(role, content){ history.push({role, content}); save(); render(); }
+
+async function sendMessage(text){
+  if(!text.trim()) return;
+  push("user", text);
+  inputEl.value = "";
+
+  // Placeholder assistant bubble for streaming
+  const row = document.createElement("div"); row.className = "msg bot";
+  row.innerHTML = `<div class="avatar">AI</div><div class="bubble" id="liveBubble"></div>`;
+  chatEl.appendChild(row);
+  const live = row.querySelector("#liveBubble");
+
+  try{
+    if(PROXY_URL){
+      // SAFE MODE — use your proxy
+      await streamFromProxy(text, live);
+    } else if (DIRECT_KEY){
+      // EASY/UNSAFE MODE — call provider directly (may fail due to CORS)
+      await streamDirect(text, live);
+    } else {
+      // DUMMY — echo fallback
+      await fakeReply(text, live);
+    }
+  }catch(err){
+    live.textContent = "Sorry, I encountered an error: " + err.message;
+  }finally{
+    chatEl.scrollTop = chatEl.scrollHeight;
+  }
+}
+
+async function streamFromProxy(userText, live){
+  const res = await fetch(PROXY_URL, {
+    method: "POST",
+    headers: { "Content-Type":"application/json" },
+    body: JSON.stringify({ messages: [...history, {role:"user", content:userText}] })
+  });
+  if(!res.ok) throw new Error(await res.text());
+  await readStream(res.body, live);
+}
+
+async function streamDirect(userText, live){
+  const provider = DIRECT_PROVIDER;
+  if(provider==="openai"){
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method:"POST",
+      headers:{
+        "Authorization":"Bearer "+DIRECT_KEY,
+        "Content-Type":"application/json"
+      },
+      body: JSON.stringify({
+        model: MODELS.openai,
+        messages: [...history, {role:"user", content:userText}],
+        stream: true
+      })
+    });
+    if(!res.ok) throw new Error(await res.text());
+    await readSSE(res.body, live, "openai");
+  } else {
+    // DeepSeek compatible chat-completions endpoint (provider must allow browser)
+    const res = await fetch("https://api.deepseek.com/chat/completions", {
+      method:"POST",
+      headers:{
+        "Authorization":"Bearer "+DIRECT_KEY,
+        "Content-Type":"application/json"
+      },
+      body: JSON.stringify({
+        model: MODELS.deepseek,
+        messages: [...history, {role:"user", content:userText}],
+        stream: true
+      })
+    });
+    if(!res.ok) throw new Error(await res.text());
+    await readSSE(res.body, live, "openai"); // SSE format is similar
+  }
+}
+
+/* ReadableStream (chunked text) from proxy */
+async function readStream(stream, live){
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let text = "";
+  while(true){
+    const {value, done} = await reader.read();
+    if(done) break;
+    text += decoder.decode(value, {stream:true});
+    live.textContent = text;
+    chatEl.scrollTop = chatEl.scrollHeight;
+  }
+  push("assistant", text.trim());
+}
+
+/* SSE stream (OpenAI-style data: lines starting with 'data:') */
+async function readSSE(stream, live){
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let buff = "", full = "";
+  while(true){
+    const {value, done} = await reader.read();
+    if(done) break;
+    buff += decoder.decode(value, {stream:true});
+    const parts = buff.split("\n\n");
+    buff = parts.pop();
+    for(const part of parts){
+      const line = part.trim();
+      if(!line.startsWith("data:")) continue;
+      const payload = line.slice(5).trim();
+      if(payload==="[DONE]") break;
+      try{
+        const json = JSON.parse(payload);
+        const delta = json.choices?.[0]?.delta?.content ?? json.choices?.[0]?.message?.content ?? "";
+        if(delta){
+          full += delta;
+          live.textContent = full;
+          chatEl.scrollTop = chatEl.scrollHeight;
+        }
+      }catch{}
+    }
+  }
+  push("assistant", full.trim());
+}
+
+/* Dummy local echo */
+async function fakeReply(userText, live){
+  const reply = "Echo: " + userText + "\n\n(Setup proxy or add API key to talk to a real model.)";
+  for (const ch of reply){
+    await new Promise(r=>setTimeout(r,10));
+    live.textContent += ch;
+    chatEl.scrollTop = chatEl.scrollHeight;
+  }
+  push("assistant", reply);
+}
+
+/* UI wiring */
+sendBtn.onclick = ()=> sendMessage(inputEl.value);
+inputEl.onkeydown = (e)=>{ if(e.key==="Enter" && !e.shiftKey){ e.preventDefault(); sendMessage(inputEl.value); } };
+document.querySelectorAll(".chip").forEach(chip=>{
+  chip.onclick = ()=> { inputEl.value = chip.textContent; inputEl.focus(); }
+});
+newChatBtn.onclick = ()=>{ history = []; save(); render(); };
+themeBtn.onclick = ()=>{
+  const light = document.documentElement.dataset.theme === "light";
+  if(light){ delete document.documentElement.dataset.theme; themeBtn.textContent="Light Mode"; }
+  else { document.documentElement.dataset.theme="light"; themeBtn.textContent="Dark Mode"; }
+};
+render();
+</script>
+</body>
+</html>
